@@ -155,6 +155,20 @@
   <!-- Main Workspace -->
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 space-y-5">
 
+    <!-- Android Chrome Service Worker Helper Banner (Shown on mobile if sw.js is not yet registered) -->
+    <div id="sw-mobile-notice" class="hidden rounded-2xl border border-amber-500/40 bg-amber-950/30 px-4 py-3 text-xs text-amber-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div class="flex items-start gap-2.5">
+        <span class="w-2 h-2 rounded-full bg-amber-400 mt-1.5 shrink-0"></span>
+        <div>
+          <p class="font-bold text-amber-300">Android Chrome Push Requirement: Add <code class="font-mono bg-slate-950 px-1.5 py-0.5 rounded text-amber-200">sw.js</code> alongside <code class="font-mono bg-slate-950 px-1.5 py-0.5 rounded text-amber-200">index.html</code></p>
+          <p class="text-amber-100/80 mt-0.5 leading-relaxed">Android Chrome blocks <code class="font-mono">new Notification()</code> without an active Service Worker. Add a <code class="font-mono">sw.js</code> file in the same folder as <code class="font-mono">index.html</code> and reload to enable native Android notification banners.</p>
+        </div>
+      </div>
+      <button onclick="registerRadarServiceWorker(true)" class="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-semibold shrink-0 self-start sm:self-center transition">
+        Retry SW Check
+      </button>
+    </div>
+
     <!-- Top KPI Telemetry Strip -->
     <section class="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <div class="bg-[#0d1424] border border-slate-800/90 rounded-2xl p-3.5 flex items-center justify-between">
@@ -492,6 +506,8 @@
       hasCompletedFirstScan: false,
       unreadAlerts: 0,
       wakeLock: null,
+      swRegistration: null,
+      swStatus: 'idle', // 'idle' | 'active' | 'missing' | 'unsupported'
       activeTab: 'radar',
       selectedRuleId: null, // Active watch rule filter ID
       detectedStatusFilter: 'all' // 'all' | 'instock' | 'recent'
@@ -1219,30 +1235,209 @@
     }
 
     /**
-     * Simulate a realistic Level Up Store Drop for immediate user testing
+     * Native Browser & Android Service Worker Notification Management
      */
-    function simulateDropAlert() {
-      const activeRule = state.watchlist.find(r => r.active) || { keyword: '30th Celebration' };
-      const sampleProduct = {
-        id: `sim-${Date.now()}`,
-        title: `Pokémon TCG: ${activeRule.keyword} Elite Trainer Box [SA Allocation]`,
-        minPrice: 1499.00,
-        available: true,
-        image: 'https://placehold.co/300x300/10b981/070b14?text=DROP+TEST',
-        url: `${STORE_BASE_URL}/collections/all`
+    function isMobileOrAndroid() {
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+    }
+
+    async function getActiveServiceWorkerRegistration() {
+      if (!('serviceWorker' in navigator)) return null;
+      if (state.swRegistration && (state.swRegistration.active || state.swRegistration.installing || state.swRegistration.waiting)) {
+        return state.swRegistration;
+      }
+      try {
+        const existing = await navigator.serviceWorker.getRegistration('./');
+        if (existing) {
+          state.swRegistration = existing;
+          state.swStatus = 'active';
+          return existing;
+        }
+        const readyReg = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise(resolve => setTimeout(() => resolve(null), 1500))
+        ]);
+        if (readyReg) {
+          state.swRegistration = readyReg;
+          state.swStatus = 'active';
+          return readyReg;
+        }
+      } catch (e) {
+        console.warn('ServiceWorker lookup failed:', e);
+      }
+      return null;
+    }
+
+    async function registerRadarServiceWorker(manualRetry = false) {
+      const isHttp = window.location.protocol === 'https:' || window.location.protocol === 'http:';
+      if (!isHttp || !('serviceWorker' in navigator)) {
+        state.swStatus = 'unsupported';
+        updateNotificationUI();
+        return null;
+      }
+
+      try {
+        const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+        state.swRegistration = reg;
+        state.swStatus = 'active';
+        updateNotificationUI();
+        if (manualRetry) {
+          showToast('Service Worker Active', 'Android Chrome system notifications are now ready.', 'success');
+        }
+        return reg;
+      } catch (err) {
+        console.warn('Service Worker registration failed (ensure sw.js exists alongside index.html):', err);
+        state.swStatus = 'missing';
+        updateNotificationUI();
+        if (manualRetry) {
+          showToast(
+            'sw.js Not Found',
+            'Add sw.js alongside index.html in your repository, wait ~30s for GitHub Pages, and tap Retry.',
+            'alert'
+          );
+        }
+        return null;
+      }
+    }
+
+    async function dispatchSystemNotification(title, options, targetUrl) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+
+      const notifOptions = {
+        ...options,
+        vibrate: [200, 100, 200, 100, 300],
+        renotify: true,
+        data: { url: targetUrl || STORE_BASE_URL }
       };
 
-      triggerDropAlert({
-        product: sampleProduct,
-        rule: activeRule,
-        eventType: 'NEW_LISTING',
-        isSimulated: true
-      });
+      // 1. Prefer ServiceWorkerRegistration.showNotification() (Mandatory on Android Chrome)
+      const swReg = await getActiveServiceWorkerRegistration();
+      if (swReg && typeof swReg.showNotification === 'function') {
+        try {
+          await swReg.showNotification(title, notifOptions);
+          return true;
+        } catch (swErr) {
+          console.warn('swReg.showNotification failed, trying fallback:', swErr);
+        }
+      }
 
-      showToast(
-        'Simulated Drop Alert Fired!',
-        `Tested audio chime, alert history log & browser notification for "${sampleProduct.title}".`,
-        'alert'
+      // 2. Fallback to window.Notification constructor (Desktop browsers)
+      try {
+        const notif = new Notification(title, notifOptions);
+        notif.onclick = function (e) {
+          e.preventDefault();
+          window.focus();
+          if (targetUrl) {
+            window.open(targetUrl, '_blank', 'noopener,noreferrer');
+          }
+          notif.close();
+        };
+        return true;
+      } catch (ctorErr) {
+        console.warn('window.Notification constructor failed (expected on Android Chrome without sw.js):', ctorErr);
+        if (isMobileOrAndroid()) {
+          state.swStatus = 'missing';
+          updateNotificationUI();
+          showToast(
+            'Add sw.js for Android Banners',
+            'Android Chrome requires sw.js alongside index.html to display OS notification banners.',
+            'alert'
+          );
+        }
+        return false;
+      }
+    }
+
+    function updateNotificationUI() {
+      const btn = document.getElementById('notif-perm-btn');
+      const label = document.getElementById('notif-perm-label');
+      const swNotice = document.getElementById('sw-mobile-notice');
+
+      if (!('Notification' in window)) {
+        label.textContent = 'Push Unsupported';
+        btn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border bg-slate-900 border-slate-700 text-slate-500 flex items-center gap-1.5';
+        if (swNotice) swNotice.classList.add('hidden');
+        return;
+      }
+
+      const needsMobileSw = isMobileOrAndroid() && state.swStatus === 'missing';
+      if (swNotice) {
+        if (needsMobileSw && Notification.permission === 'granted') {
+          swNotice.classList.remove('hidden');
+        } else {
+          swNotice.classList.add('hidden');
+        }
+      }
+
+      if (Notification.permission === 'granted') {
+        if (needsMobileSw) {
+          label.textContent = 'Push Needs sw.js';
+          btn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border bg-amber-500/15 border-amber-500/40 text-amber-300 flex items-center gap-1.5';
+        } else {
+          label.textContent = 'Push Alerts Active';
+          btn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border bg-emerald-500/10 border-emerald-500/40 text-emerald-300 flex items-center gap-1.5';
+        }
+      } else if (Notification.permission === 'denied') {
+        label.textContent = 'Push Blocked (Check Browser)';
+        btn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border bg-rose-500/10 border-rose-500/40 text-rose-300 flex items-center gap-1.5';
+      } else {
+        label.textContent = 'Enable Push Alerts';
+        btn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25 flex items-center gap-1.5';
+      }
+    }
+
+    async function requestNotificationPermission() {
+      playAlertChime();
+
+      if (!('Notification' in window)) {
+        showToast('WebView Push Notice', 'Embedded mobile browsers disable OS push APIs, so in-app alerts & audio chimes are active.', 'info');
+        return;
+      }
+
+      if (Notification.permission === 'granted') {
+        if (isMobileOrAndroid() && state.swStatus !== 'active') {
+          await registerRadarServiceWorker(true);
+        } else {
+          showToast('Notifications Ready', 'Native OS notifications are already enabled for Level Up Store drops.', 'success');
+        }
+        return;
+      }
+
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          await registerRadarServiceWorker(false);
+          updateNotificationUI();
+          showToast('Push Alerts Enabled!', 'You will now receive instant OS popups when watched items drop.', 'success');
+          await dispatchSystemNotification(
+            'Level Up Store SA • Drop Radar Armed',
+            {
+              body: 'Monitoring levelupstore.co.za for your watchlist keywords.',
+              icon: 'https://placehold.co/128x128/10b981/070b14?text=LU',
+              tag: 'levelup-armed'
+            },
+            STORE_BASE_URL
+          );
+        } else {
+          updateNotificationUI();
+          showToast('Permission Dismissed', 'Enable notifications in your browser site settings for background OS popups.', 'alert');
+        }
+      } catch (err) {
+        console.error('Notification permission error:', err);
+      }
+    }
+
+    async function sendNativeNotification(alertItem) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const badgeText = alertItem.eventType === 'NEW_LISTING' ? '🆕 NEW LISTING' : '🔥 RESTOCKED';
+      await dispatchSystemNotification(
+        `${badgeText}: ${alertItem.title}`,
+        {
+          body: `${formatZAR(alertItem.price)} • Matched "${alertItem.matchedRule}"\nTap to open Level Up Store SA`,
+          icon: alertItem.image || 'https://placehold.co/128x128/10b981/070b14?text=LU',
+          tag: `levelup-${alertItem.productId}-${alertItem.eventType}`
+        },
+        alertItem.url
       );
     }
 
@@ -1831,6 +2026,9 @@
       document.getElementById('interval-select').value = String(state.settings.intervalSec);
       updateNotificationUI();
       updateAudioUI();
+
+      // Register Service Worker for Android Chrome ServiceWorkerRegistration.showNotification()
+      registerRadarServiceWorker(false);
 
       // Immediately render cached catalog, watch rules, and alerts in <100ms
       updateAllUI();
