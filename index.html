@@ -1,0 +1,1853 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Level Up Store SA • Drop Radar & Stock Sniper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            radar: {
+              bg: '#070b14',
+              panel: '#0d1424',
+              card: '#11192e',
+              border: '#1e293b',
+              accent: '#10b981',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #070b14;
+      color: #f1f5f9;
+      font-family: 'Inter', sans-serif;
+    }
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+    @keyframes radarPulse {
+      0% { transform: scale(0.95); opacity: 0.85; }
+      70% { transform: scale(1.8); opacity: 0; }
+      100% { transform: scale(1.8); opacity: 0; }
+    }
+    .radar-ring {
+      animation: radarPulse 2.2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #070b14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
+
+  <!-- Toast Notification Container (Replaces native alert/confirm) -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- Top Telemetry & Command Bar -->
+  <header class="sticky top-0 z-40 border-b border-slate-800/90 bg-[#070b14]/95 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+
+        <!-- Brand & Live Radar Status -->
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="relative flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 shrink-0">
+              <span id="radar-pulse-ring" class="absolute inset-0 rounded-xl bg-emerald-500/30 radar-ring"></span>
+              <svg class="w-5 h-5 text-emerald-400 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 2a10 10 0 1010 10M12 6a6 6 0 106 6M12 10a2 2 0 102 2m0 0l7-7" />
+              </svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-white">LEVEL UP STORE <span class="text-emerald-400">SA</span></h1>
+                <span class="px-2 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Drop Sniper</span>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                <a href="https://levelupstore.co.za/" target="_blank" rel="noopener noreferrer" class="hover:text-emerald-400 transition-colors flex items-center gap-1">
+                  levelupstore.co.za
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                </a>
+                <span>•</span>
+                <span id="telemetry-badge" class="font-mono text-[11px] text-cyan-400">Syncing live feed...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mobile Quick Scan Button -->
+          <button id="mobile-scan-btn" onclick="triggerManualScan()" class="lg:hidden px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-lg shadow-emerald-500/20">
+            <svg id="mobile-scan-spinner" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            Scan
+          </button>
+        </div>
+
+        <!-- Telemetry Controls & Countdown -->
+        <div class="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          <!-- Countdown Pill -->
+          <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800">
+            <button id="toggle-auto-btn" onclick="toggleAutoScan()" title="Pause/Resume Auto Polling" class="text-emerald-400 hover:text-emerald-300 transition">
+              <svg id="icon-pause" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+              <svg id="icon-play" class="w-4 h-4 hidden text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+            </button>
+            <div class="text-xs font-mono">
+              <span class="text-slate-400">Next:</span>
+              <span id="countdown-display" class="text-white font-bold tabular-nums">60s</span>
+            </div>
+            <select id="interval-select" onchange="changeScanInterval(this.value)" aria-label="Polling Interval" class="bg-slate-800 text-slate-200 text-[11px] font-mono rounded-lg px-1.5 py-0.5 border border-slate-700 focus:outline-none focus:border-emerald-500">
+              <option value="30">30s</option>
+              <option value="60" selected>60s</option>
+              <option value="120">2m</option>
+            </select>
+          </div>
+
+          <!-- Notification Permission Button -->
+          <button id="notif-perm-btn" onclick="requestNotificationPermission()" class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 bg-amber-500/10 border-amber-500/40 text-amber-300 hover:bg-amber-500/20">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+            <span id="notif-perm-label">Enable Push Alerts</span>
+          </button>
+
+          <!-- Audio Chime Toggle -->
+          <button id="audio-toggle-btn" onclick="toggleAudioMute()" title="Toggle Alert Sound" class="p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-emerald-400 transition">
+            <svg id="icon-sound-on" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+            <svg id="icon-sound-off" class="w-4 h-4 hidden text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
+          </button>
+
+          <!-- Test Alert / Simulate Drop -->
+          <button onclick="simulateDropAlert()" class="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 text-xs font-semibold transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            Test Drop Alert
+          </button>
+
+          <!-- Desktop Scan Now Button -->
+          <button id="desktop-scan-btn" onclick="triggerManualScan()" class="hidden lg:flex px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold text-xs transition items-center gap-1.5 shadow-lg shadow-emerald-500/20">
+            <svg id="scan-spinner" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            Scan Now
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5 space-y-5">
+
+    <!-- Top KPI Telemetry Strip -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="bg-[#0d1424] border border-slate-800/90 rounded-2xl p-3.5 flex items-center justify-between">
+        <div>
+          <p class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Active Watch Rules</p>
+          <p id="stat-active-rules" class="text-2xl font-extrabold text-white tabular-nums mt-0.5">0</p>
+        </div>
+        <div class="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+        </div>
+      </div>
+
+      <div class="bg-[#0d1424] border border-slate-800/90 rounded-2xl p-3.5 flex items-center justify-between">
+        <div>
+          <p class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Indexed Catalog</p>
+          <div class="flex items-baseline gap-2 mt-0.5">
+            <p id="stat-catalog-count" class="text-2xl font-extrabold text-white tabular-nums">0</p>
+            <span id="stat-instock-count" class="text-xs font-mono text-emerald-400">0 in stock</span>
+          </div>
+        </div>
+        <div class="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+        </div>
+      </div>
+
+      <div class="bg-[#0d1424] border border-slate-800/90 rounded-2xl p-3.5 flex items-center justify-between">
+        <div>
+          <p class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Alerts Triggered</p>
+          <p id="stat-alerts-count" class="text-2xl font-extrabold text-amber-400 tabular-nums mt-0.5">0</p>
+        </div>
+        <div class="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+        </div>
+      </div>
+
+      <div class="bg-[#0d1424] border border-slate-800/90 rounded-2xl p-3.5 flex items-center justify-between">
+        <div>
+          <p class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Last Scan (SAST)</p>
+          <p id="stat-last-scan" class="text-base sm:text-lg font-mono font-bold text-slate-200 tabular-nums mt-1">--:--:--</p>
+        </div>
+        <div class="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- Primary Navigation Tabs -->
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <div class="flex items-center gap-2 bg-[#0d1424] p-1 rounded-xl border border-slate-800">
+        <button id="tab-btn-radar" onclick="switchTab('radar')" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition bg-emerald-500 text-slate-950 shadow">
+          Watchlist & Alerts
+          <span id="tab-alert-badge" class="hidden ml-1.5 px-1.5 py-0.2 text-[10px] font-mono font-bold rounded-full bg-slate-950 text-emerald-400">0</span>
+        </button>
+        <button id="tab-btn-feed" onclick="switchTab('feed')" class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-300 hover:text-white">
+          Live Store Feed
+          <span id="tab-feed-count" class="ml-1 text-[11px] font-mono text-slate-400">(0)</span>
+        </button>
+      </div>
+
+      <!-- Wake Lock & Baseline Controls -->
+      <div class="flex items-center gap-2">
+        <button id="wakelock-btn" onclick="toggleWakeLock()" title="Keep screen awake while monitoring" class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 transition flex items-center gap-1.5">
+          <span id="wakelock-dot" class="w-2 h-2 rounded-full bg-slate-600"></span>
+          Screen Stay-Awake: <span id="wakelock-status" class="font-mono text-slate-400">OFF</span>
+        </button>
+        <button onclick="resetBaselineSnapshot()" title="Re-snapshot current store catalog as baseline" class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 transition">
+          Re-Sync Baseline
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB 1: WATCHLIST & ALERTS -->
+    <div id="view-radar" class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+      <!-- Left Column: Watchlist Rule Builder & Active Rules (5 cols) -->
+      <div id="watchlist-section" class="lg:col-span-5 space-y-4 scroll-mt-24">
+        <div class="bg-[#0d1424] border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              Product Sniper Watchlist
+            </h2>
+            <span class="text-[11px] font-mono text-slate-400">Matches Title / Tags</span>
+          </div>
+
+          <!-- Add Watch Rule Form -->
+          <form id="add-rule-form" onsubmit="handleAddRule(event)" class="space-y-3 bg-[#11192e] p-3.5 rounded-xl border border-slate-800/80">
+            <div>
+              <label for="rule-keyword" class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Target Product Keyword / Phrase *</label>
+              <input id="rule-keyword" type="text" required placeholder='e.g. "30th Celebration" or "Mega Evolution"' class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700/80 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition" />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label for="rule-exclude" class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Exclude Words (Optional)</label>
+                <input id="rule-exclude" type="text" placeholder="e.g. Sleeves, Binder, Code" class="w-full px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700/80 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition" />
+              </div>
+              <div>
+                <label for="rule-max-price" class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Max Price ZAR (Optional)</label>
+                <div class="relative">
+                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono text-slate-400">R</span>
+                  <input id="rule-max-price" type="number" min="1" step="any" placeholder="e.g. 2500" class="w-full pl-7 pr-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700/80 text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition" />
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+              <select id="rule-trigger-mode" aria-label="Trigger Mode" class="px-2.5 py-1.5 rounded-xl bg-slate-950 border border-slate-700/80 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+                <option value="both">Trigger: New Listing + Restock</option>
+                <option value="new_only">Trigger: New Listings Only</option>
+                <option value="restock_only">Trigger: Restocks Only</option>
+              </select>
+
+              <button type="submit" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/15">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+                Add Watch Rule
+              </button>
+            </div>
+          </form>
+
+          <!-- Quick Preset Chips -->
+          <div class="mt-3">
+            <p class="text-[11px] text-slate-400 mb-1.5">Quick-add popular Level Up Store drop keywords:</p>
+            <div id="preset-chips" class="flex flex-wrap gap-1.5"></div>
+          </div>
+
+          <!-- Active Watchlist Items -->
+          <div class="mt-4 pt-4 border-t border-slate-800/80">
+            <div class="flex items-center justify-between mb-2.5">
+              <div>
+                <span class="text-xs font-semibold text-slate-300">Your Watch Rules</span>
+                <p class="text-[11px] text-slate-500">Tap a rule to inspect its detected products</p>
+              </div>
+              <span id="watchlist-count-label" class="text-[11px] font-mono text-slate-400">0 rules</span>
+            </div>
+            <div id="watchlist-container" class="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Detected Products for Watch Rules + Real-Time Alert Feed (7 cols) -->
+      <div class="lg:col-span-7 space-y-4">
+        <!-- Rule-Filtered Detected Products Panel -->
+        <div id="detected-products-section" class="bg-[#0d1424] border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl scroll-mt-24">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 class="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span id="detected-section-title">Detected Watchlist Products</span>
+              </h2>
+              <p id="detected-section-subtitle" class="text-xs text-slate-400 mt-0.5">Live catalog items matching your watch rules.</p>
+            </div>
+            <button onclick="scrollToRules()" class="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-semibold text-slate-300 hover:text-white transition">
+              Back to Rules ↑
+            </button>
+          </div>
+
+          <!-- Active Watch Rule Filter Banner (Visible when a specific rule is clicked) -->
+          <div id="active-rule-banner" class="hidden mb-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500 text-slate-950 uppercase">Rule Filter</span>
+                <span id="active-rule-banner-title" class="text-xs sm:text-sm font-bold text-white truncate">Showing matches for: ""</span>
+              </div>
+              <p id="active-rule-banner-meta" class="text-[11px] font-mono text-emerald-300/90 mt-1">0 in catalog • 0 in stock</p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button onclick="clearSelectedRuleFilter()" class="px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-900 border border-emerald-500/40 text-xs font-bold text-emerald-300 hover:text-white transition">
+                × Show All
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Status Filter Pills -->
+          <div class="flex flex-wrap items-center gap-1.5 mb-3">
+            <button id="pill-status-all" onclick="setDetectedStatusFilter('all')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-emerald-500 text-slate-950">
+              All Matched
+            </button>
+            <button id="pill-status-instock" onclick="setDetectedStatusFilter('instock')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-900 border border-slate-800 text-slate-300 hover:text-white">
+              In Stock Only
+            </button>
+            <button id="pill-status-recent" onclick="setDetectedStatusFilter('recent')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-900 border border-slate-800 text-slate-300 hover:text-white">
+              New & Restocks
+            </button>
+          </div>
+
+          <!-- Matched Products Container -->
+          <div id="detected-products-container" class="space-y-2.5 max-h-[540px] overflow-y-auto pr-1">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Real-Time Alert History Feed -->
+        <div class="bg-[#0d1424] border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 class="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                Real-Time Drop & Restock Alert Feed
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">Instant notifications when watched products drop or restock on Level Up Store.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="playAlertChime()" class="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[11px] font-medium text-slate-300 transition">
+                Test Chime
+              </button>
+              <button onclick="clearAlertHistory()" class="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-rose-950/50 border border-slate-700 hover:border-rose-500/40 text-[11px] font-medium text-slate-400 hover:text-rose-300 transition">
+                Clear Log
+              </button>
+            </div>
+          </div>
+
+          <!-- Alert Cards List -->
+          <div id="alert-history-container" class="space-y-3 flex-1 max-h-[420px] overflow-y-auto pr-1">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: LIVE STORE FEED -->
+    <div id="view-feed" class="hidden space-y-4">
+      <div class="bg-[#0d1424] border border-slate-800 rounded-2xl p-4 sm:p-5">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 class="text-base font-bold text-white">Level Up Store — Live Catalog Feed (Newest First)</h2>
+            <p class="text-xs text-slate-400">Directly synced from <span class="font-mono text-slate-300">levelupstore.co.za/products.json</span> sorted by publish timestamp.</p>
+          </div>
+
+          <!-- Search & Filter Bar -->
+          <div class="flex flex-wrap items-center gap-2">
+            <input id="feed-search-input" oninput="renderLiveFeed()" type="text" placeholder="Filter live catalog..." class="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-48 sm:w-56" />
+
+            <label class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer select-none">
+              <input id="feed-instock-only" onchange="renderLiveFeed()" type="checkbox" class="rounded text-emerald-500 focus:ring-0 bg-slate-950 border-slate-700" />
+              In Stock Only
+            </label>
+
+            <label class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 cursor-pointer select-none">
+              <input id="feed-matches-only" onchange="renderLiveFeed()" type="checkbox" class="rounded text-emerald-500 focus:ring-0 bg-slate-950 border-slate-700" />
+              Matches Watchlist
+            </label>
+          </div>
+        </div>
+
+        <!-- Product Grid -->
+        <div id="live-feed-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Collapsible Background Reliability & Mobile/Desktop Guide -->
+    <section class="bg-[#0d1424] border border-slate-800/90 rounded-2xl overflow-hidden">
+      <button onclick="toggleGuideAccordion()" class="w-full px-4 sm:px-5 py-3.5 flex items-center justify-between text-left hover:bg-slate-900/50 transition">
+        <div class="flex items-center gap-2.5">
+          <span class="px-2 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[11px] font-mono font-semibold">PRO TIP</span>
+          <span class="text-xs sm:text-sm font-semibold text-slate-200">Background Reliability Guide (Preventing Browser Tab Throttling)</span>
+        </div>
+        <svg id="guide-chevron" class="w-4 h-4 text-slate-400 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+      </button>
+
+      <div id="guide-content" class="hidden px-4 sm:px-5 pb-4 pt-1 border-t border-slate-800/80 text-xs text-slate-300 space-y-2.5">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+          <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+            <h3 class="font-bold text-emerald-400 mb-1">1. Dedicated Window (Desktop)</h3>
+            <p class="text-slate-400 leading-relaxed">Modern browsers (Chrome, Edge, Safari) throttle background tabs after ~5 minutes of inactivity. For uninterrupted 60-second checks, pull this tab into its own small browser window or keep it visible on a secondary monitor.</p>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+            <h3 class="font-bold text-cyan-400 mb-1">2. Mobile Stay-Awake Mode</h3>
+            <p class="text-slate-400 leading-relaxed">On Android/iOS, tap <strong>"Enable Push Alerts"</strong> and toggle <strong>"Screen Stay-Awake: ON"</strong> above during major drop windows so your phone doesn't suspend network timers.</p>
+          </div>
+          <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+            <h3 class="font-bold text-amber-400 mb-1">3. Audio + OS Push Combo</h3>
+            <p class="text-slate-400 leading-relaxed">Keep the audio chime unmuted—even if a window is behind another app, the Web Audio synthesizer chime will play immediately and clicking the OS popup takes you straight to Level Up Store checkout.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 py-3.5 px-4 sm:px-6 text-center text-[11px] text-slate-500">
+    Level Up Store SA Stock Sniper • Polls public Shopify catalog endpoints every 60s • Prices in South African Rand (ZAR)
+  </footer>
+
+  <script>
+    /**
+     * ============================================================================
+     * LEVEL UP STORE SA — ULTRA-FAST PARALLEL DROP RADAR & STOCK SNIPER ENGINE
+     * ============================================================================
+     */
+
+    const STORE_BASE_URL = 'https://levelupstore.co.za';
+
+    // LocalStorage Keys
+    const LS_KEYS = {
+      WATCHLIST: 'levelup_radar_watchlist_v1',
+      BASELINE: 'levelup_radar_baseline_v1',
+      CATALOG: 'levelup_radar_catalog_cache_v1',
+      ALERTS: 'levelup_radar_alerts_v1',
+      SETTINGS: 'levelup_radar_settings_v1'
+    };
+
+    // Popular drop keywords tailored for Level Up Store SA (TCG, Pokémon, One Piece, Sports Cards, MTG)
+    const QUICK_PRESETS = [
+      '30th Celebration',
+      'Mega Evolution',
+      'Topps Chrome',
+      'Heroines Edition',
+      'EB-05',
+      'Start Deck 100',
+      'Nauctis',
+      'Secret Lair',
+      'Prismatic Evolutions',
+      'Destined Rivals'
+    ];
+
+    // Application State
+    let state = {
+      watchlist: [],
+      baseline: {}, // { [productId]: { title, handle, available, minPrice, publishedAt, seenAt } }
+      alerts: [],
+      products: [], // Latest normalized catalog array
+      settings: {
+        intervalSec: 60,
+        autoScan: true,
+        muted: false
+      },
+      countdown: 60,
+      isScanning: false,
+      hasCompletedFirstScan: false,
+      unreadAlerts: 0,
+      wakeLock: null,
+      activeTab: 'radar',
+      selectedRuleId: null, // Active watch rule filter ID
+      detectedStatusFilter: 'all' // 'all' | 'instock' | 'recent'
+    };
+
+    let timerInterval = null;
+    let audioCtx = null;
+
+    /**
+     * Formatting & Escaping Utilities
+     */
+    function formatZAR(amount) {
+      const num = parseFloat(amount);
+      if (isNaN(num) || num <= 0) return 'R 0.00';
+      return 'R ' + num.toLocaleString('en-ZA', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function formatTimeSAST(dateObj = new Date()) {
+      try {
+        return dateObj.toLocaleTimeString('en-ZA', {
+          timeZone: 'Africa/Johannesburg',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+      } catch (e) {
+        return dateObj.toTimeString().slice(0, 8);
+      }
+    }
+
+    function formatRelativeDate(isoStr) {
+      if (!isoStr) return 'Recently listed';
+      const ts = new Date(isoStr).getTime();
+      if (isNaN(ts)) return 'Recently listed';
+      const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+      if (diffSec < 60) return `${diffSec}s ago`;
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return `${diffHr}h ago`;
+      const diffDay = Math.floor(diffHr / 24);
+      return `${diffDay}d ago`;
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    /**
+     * In-App Toast Banner (Zero native alert() calls)
+     */
+    function showToast(title, message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+
+      const palette = {
+        success: 'bg-emerald-950/95 border-emerald-500/50 text-emerald-100',
+        alert: 'bg-amber-950/95 border-amber-500/60 text-amber-100',
+        error: 'bg-rose-950/95 border-rose-500/50 text-rose-100',
+        info: 'bg-slate-900/95 border-slate-700 text-slate-100'
+      };
+
+      const badgeColor = {
+        success: 'bg-emerald-400',
+        alert: 'bg-amber-400',
+        error: 'bg-rose-400',
+        info: 'bg-cyan-400'
+      };
+
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto rounded-xl border p-3.5 shadow-2xl backdrop-blur-md transition-all duration-200 ${palette[type] || palette.info}`;
+      toast.innerHTML = `
+        <div class="flex items-start gap-2.5">
+          <span class="w-2 h-2 rounded-full mt-1.5 shrink-0 ${badgeColor[type] || badgeColor.info}"></span>
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-bold leading-snug">${escapeHtml(title)}</p>
+            <p class="text-[11px] opacity-85 mt-0.5 leading-relaxed">${escapeHtml(message)}</p>
+          </div>
+          <button onclick="this.parentElement.parentElement.remove()" class="text-xs opacity-60 hover:opacity-100 px-1">✕</button>
+        </div>
+      `;
+
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(6px)';
+        setTimeout(() => toast.remove(), 220);
+      }, 4500);
+    }
+
+    /**
+     * State Persistence (Cache-First Hydration)
+     */
+    function loadState() {
+      try {
+        const savedWatchlist = localStorage.getItem(LS_KEYS.WATCHLIST);
+        if (savedWatchlist) {
+          state.watchlist = JSON.parse(savedWatchlist);
+        } else {
+          state.watchlist = [
+            {
+              id: 'rule-default-0',
+              keyword: '30th anniversary',
+              exclude: '',
+              maxPrice: null,
+              triggerMode: 'both',
+              active: true
+            },
+            {
+              id: 'rule-default-1',
+              keyword: '30th Celebration',
+              exclude: 'Sleeves, Binder',
+              maxPrice: null,
+              triggerMode: 'both',
+              active: true
+            },
+            {
+              id: 'rule-default-2',
+              keyword: 'Mega Evolution',
+              exclude: '',
+              maxPrice: null,
+              triggerMode: 'both',
+              active: true
+            },
+            {
+              id: 'rule-default-3',
+              keyword: 'Topps Chrome',
+              exclude: '',
+              maxPrice: null,
+              triggerMode: 'both',
+              active: true
+            }
+          ];
+          saveWatchlist();
+        }
+
+        const savedBaseline = localStorage.getItem(LS_KEYS.BASELINE);
+        if (savedBaseline) state.baseline = JSON.parse(savedBaseline);
+
+        // Immediately hydrate cached catalog for <100ms instant UI startup
+        const savedCatalog = localStorage.getItem(LS_KEYS.CATALOG);
+        if (savedCatalog) {
+          const parsedCatalog = JSON.parse(savedCatalog);
+          if (Array.isArray(parsedCatalog) && parsedCatalog.length > 0) {
+            state.products = parsedCatalog;
+          }
+        }
+
+        const savedAlerts = localStorage.getItem(LS_KEYS.ALERTS);
+        if (savedAlerts) state.alerts = JSON.parse(savedAlerts);
+
+        const savedSettings = localStorage.getItem(LS_KEYS.SETTINGS);
+        if (savedSettings) {
+          state.settings = { ...state.settings, ...JSON.parse(savedSettings) };
+        }
+        state.countdown = state.settings.intervalSec;
+      } catch (err) {
+        console.error('Error loading localStorage state:', err);
+      }
+    }
+
+    function saveWatchlist() {
+      try {
+        localStorage.setItem(LS_KEYS.WATCHLIST, JSON.stringify(state.watchlist));
+      } catch (e) {
+        console.warn('Could not save watchlist:', e);
+      }
+    }
+
+    function saveBaseline() {
+      try {
+        localStorage.setItem(LS_KEYS.BASELINE, JSON.stringify(state.baseline));
+      } catch (e) {
+        console.warn('Could not save baseline:', e);
+      }
+    }
+
+    function saveCatalogCache() {
+      try {
+        localStorage.setItem(LS_KEYS.CATALOG, JSON.stringify(state.products.slice(0, 600)));
+      } catch (e) {
+        console.warn('Could not save catalog cache:', e);
+      }
+    }
+
+    function saveAlerts() {
+      try {
+        state.alerts = state.alerts.slice(0, 100);
+        localStorage.setItem(LS_KEYS.ALERTS, JSON.stringify(state.alerts));
+      } catch (e) {
+        console.warn('Could not save alerts:', e);
+      }
+    }
+
+    function saveSettings() {
+      try {
+        localStorage.setItem(LS_KEYS.SETTINGS, JSON.stringify(state.settings));
+      } catch (e) {
+        console.warn('Could not save settings:', e);
+      }
+    }
+
+    /**
+     * Evaluate if a product matches a specific watch rule
+     */
+    function productMatchesRule(product, rule) {
+      if (!rule) return false;
+      const kw = (rule.keyword || '').trim().toLowerCase();
+      if (!kw) return false;
+
+      const searchable = `${product.title} ${product.productType} ${product.tags}`.toLowerCase();
+      if (!searchable.includes(kw)) return false;
+
+      if (rule.exclude && rule.exclude.trim()) {
+        const excludes = rule.exclude
+          .split(',')
+          .map(s => s.trim().toLowerCase())
+          .filter(Boolean);
+        if (excludes.some(ex => searchable.includes(ex))) return false;
+      }
+
+      if (rule.maxPrice && !isNaN(parseFloat(rule.maxPrice))) {
+        if (product.minPrice > parseFloat(rule.maxPrice)) return false;
+      }
+
+      return true;
+    }
+
+    /**
+     * Evaluate if a normalized product matches any active watchlist rule
+     */
+    function findMatchingRule(product) {
+      for (const rule of state.watchlist) {
+        if (!rule.active) continue;
+        if (productMatchesRule(product, rule)) {
+          return rule;
+        }
+      }
+      return null;
+    }
+
+    /**
+     * Select/toggle a Watch Rule card to filter detected products & scroll smoothly to them
+     */
+    function selectWatchRuleFilter(ruleId) {
+      if (state.selectedRuleId === ruleId) {
+        state.selectedRuleId = null;
+        renderWatchlist();
+        renderDetectedProducts();
+        showToast('Filter Cleared', 'Showing detected products across all watch rules.', 'info');
+        return;
+      }
+
+      const rule = state.watchlist.find(r => r.id === ruleId);
+      if (!rule) return;
+
+      state.selectedRuleId = ruleId;
+      if (state.activeTab !== 'radar') {
+        switchTab('radar');
+      }
+
+      renderWatchlist();
+      renderDetectedProducts();
+
+      const targetSection = document.getElementById('detected-products-section');
+      if (targetSection) {
+        targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    function clearSelectedRuleFilter() {
+      state.selectedRuleId = null;
+      renderWatchlist();
+      renderDetectedProducts();
+    }
+
+    function scrollToRules() {
+      const rulesSection = document.getElementById('watchlist-section');
+      if (rulesSection) {
+        rulesSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    function setDetectedStatusFilter(status) {
+      state.detectedStatusFilter = status;
+      const pills = {
+        all: document.getElementById('pill-status-all'),
+        instock: document.getElementById('pill-status-instock'),
+        recent: document.getElementById('pill-status-recent')
+      };
+
+      Object.entries(pills).forEach(([key, el]) => {
+        if (!el) return;
+        if (key === status) {
+          el.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-emerald-500 text-slate-950';
+        } else {
+          el.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-slate-900 border border-slate-800 text-slate-300 hover:text-white';
+        }
+      });
+
+      renderDetectedProducts();
+    }
+
+    /**
+     * Web Audio API Synthesized Alert Chime (No external sound URLs)
+     */
+    function playAlertChime() {
+      if (state.settings.muted) return;
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        if (!audioCtx) audioCtx = new AudioContextClass();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        const now = audioCtx.currentTime;
+        const notes = [659.25, 830.61, 987.77, 1318.51];
+        notes.forEach((freq, idx) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+
+          gain.gain.setValueAtTime(0.001, now + idx * 0.09);
+          gain.gain.exponentialRampToValueAtTime(0.22, now + idx * 0.09 + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.09 + 0.35);
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now + idx * 0.09);
+          osc.stop(now + idx * 0.09 + 0.38);
+        });
+      } catch (e) {
+        console.warn('Web Audio chime blocked or unsupported:', e);
+      }
+    }
+
+    /**
+     * Native Browser Notification API Management
+     */
+    function updateNotificationUI() {
+      const btn = document.getElementById('notif-perm-btn');
+      const label = document.getElementById('notif-perm-label');
+      if (!('Notification' in window)) {
+        label.textContent = 'Push Unsupported';
+        btn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border bg-slate-900 border-slate-700 text-slate-500 flex items-center gap-1.5';
+        return;
+      }
+
+      if (Notification.permission === 'granted') {
+        label.textContent = 'Push Alerts Active';
+        btn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border bg-emerald-500/10 border-emerald-500/40 text-emerald-300 flex items-center gap-1.5';
+      } else if (Notification.permission === 'denied') {
+        label.textContent = 'Push Blocked (Check Browser)';
+        btn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border bg-rose-500/10 border-rose-500/40 text-rose-300 flex items-center gap-1.5';
+      } else {
+        label.textContent = 'Enable Push Alerts';
+        btn.className = 'px-3 py-1.5 rounded-xl text-xs font-semibold border bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25 flex items-center gap-1.5';
+      }
+    }
+
+    async function requestNotificationPermission() {
+      playAlertChime();
+
+      if (!('Notification' in window)) {
+        showToast('WebView Push Notice', 'Embedded mobile browsers disable OS push APIs, so in-app alerts & audio chimes are active.', 'info');
+        return;
+      }
+
+      if (Notification.permission === 'granted') {
+        showToast('Notifications Ready', 'Native OS notifications are already enabled for Level Up Store drops.', 'success');
+        return;
+      }
+
+      try {
+        const permission = await Notification.requestPermission();
+        updateNotificationUI();
+        if (permission === 'granted') {
+          showToast('Push Alerts Enabled!', 'You will now receive instant OS popups when watched items drop.', 'success');
+          new Notification('Level Up Store SA • Drop Radar Armed', {
+            body: 'Monitoring levelupstore.co.za every 60s for your watchlist keywords.',
+            icon: 'https://placehold.co/128x128/10b981/070b14?text=LU'
+          });
+        } else {
+          showToast('Permission Dismissed', 'Enable notifications in your browser site settings for background OS popups.', 'alert');
+        }
+      } catch (err) {
+        console.error('Notification permission error:', err);
+      }
+    }
+
+    function sendNativeNotification(alertItem) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      try {
+        const badgeText = alertItem.eventType === 'NEW_LISTING' ? '🆕 NEW LISTING' : '🔥 RESTOCKED';
+        const notif = new Notification(`${badgeText}: ${alertItem.title}`, {
+          body: `${formatZAR(alertItem.price)} • Matched "${alertItem.matchedRule}"\nClick to open Level Up Store SA`,
+          icon: alertItem.image || 'https://placehold.co/128x128/10b981/070b14?text=LU',
+          tag: `levelup-${alertItem.productId}-${alertItem.eventType}`
+        });
+
+        notif.onclick = function (e) {
+          e.preventDefault();
+          window.focus();
+          window.open(alertItem.url, '_blank', 'noopener,noreferrer');
+          notif.close();
+        };
+      } catch (e) {
+        console.warn('Failed to spawn native notification:', e);
+      }
+    }
+
+    /**
+     * ============================================================================
+     * PARALLEL TRANSPORT RACING (Promise.any) WITH TIGHT ABORT TIMEOUTS
+     * Races Direct fetch (3.5s) and CORS relays (4.5s) simultaneously, resolving
+     * on the very first valid Shopify JSON response and aborting slower requests.
+     * ============================================================================
+     */
+    function fetchShopifyPageRace(page = 1) {
+      const targetUrl = `${STORE_BASE_URL}/products.json?limit=250&page=${page}&_cb=${Date.now()}`;
+
+      const transports = [
+        {
+          name: 'Direct',
+          url: targetUrl,
+          timeoutMs: 3500
+        },
+        {
+          name: 'CorsProxy',
+          url: `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
+          timeoutMs: 4500
+        },
+        {
+          name: 'AllOrigins',
+          url: `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+          timeoutMs: 4500
+        },
+        {
+          name: 'CodeTabs',
+          url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+          timeoutMs: 4500
+        }
+      ];
+
+      const controllers = transports.map(() => new AbortController());
+
+      const promises = transports.map(async (transport, idx) => {
+        const controller = controllers[idx];
+        const startTime = performance.now();
+        const timer = setTimeout(() => controller.abort(), transport.timeoutMs);
+
+        try {
+          const res = await fetch(transport.url, {
+            method: 'GET',
+            signal: controller.signal,
+            headers: { 'Accept': 'application/json' }
+          });
+
+          if (!res.ok) {
+            throw new Error(`${transport.name} HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          if (!data || !Array.isArray(data.products)) {
+            throw new Error(`${transport.name} invalid JSON payload`);
+          }
+
+          clearTimeout(timer);
+
+          // Abort all other slower transport racers immediately
+          controllers.forEach((ctrl, otherIdx) => {
+            if (otherIdx !== idx) {
+              try { ctrl.abort(); } catch (_) {}
+            }
+          });
+
+          return {
+            products: data.products,
+            mode: transport.name,
+            latencyMs: Math.round(performance.now() - startTime)
+          };
+        } catch (err) {
+          clearTimeout(timer);
+          throw err;
+        }
+      });
+
+      return Promise.any(promises);
+    }
+
+    /**
+     * Normalize raw Shopify product object
+     */
+    function normalizeProduct(raw) {
+      const variants = Array.isArray(raw.variants) ? raw.variants : [];
+      const availableVariants = variants.filter(v => v.available === true);
+      const isAvailable = availableVariants.length > 0;
+
+      const prices = variants
+        .map(v => parseFloat(v.price))
+        .filter(p => !isNaN(p) && p > 0);
+
+      const minPrice = prices.length ? Math.min(...prices) : 0;
+      const maxPrice = prices.length ? Math.max(...prices) : 0;
+
+      const image =
+        (raw.images && raw.images[0] && raw.images[0].src) ||
+        (raw.image && raw.image.src) ||
+        'https://placehold.co/300x300/11192e/64748b?text=Level+Up+SA';
+
+      const tagsStr = Array.isArray(raw.tags) ? raw.tags.join(' ') : String(raw.tags || '');
+
+      return {
+        id: String(raw.id),
+        title: raw.title || 'Untitled Product',
+        handle: raw.handle || '',
+        vendor: raw.vendor || 'Level Up Store',
+        productType: raw.product_type || '',
+        tags: tagsStr,
+        publishedAt: raw.published_at || raw.created_at || null,
+        createdAt: raw.created_at || null,
+        available: isAvailable,
+        availableCount: availableVariants.length,
+        totalVariants: variants.length,
+        minPrice,
+        maxPrice,
+        image,
+        url: `${STORE_BASE_URL}/products/${raw.handle}`
+      };
+    }
+
+    /**
+     * Process an array of normalized products against baseline & update state
+     */
+    function ingestProductsBatch(normalizedBatch, { replaceCatalog = false, silent = false } = {}) {
+      const isInitialBaseline = Object.keys(state.baseline).length === 0;
+      let newAlertsTriggered = 0;
+
+      normalizedBatch.forEach(product => {
+        const prev = state.baseline[product.id];
+        const matchedRule = findMatchingRule(product);
+
+        if (!isInitialBaseline && matchedRule) {
+          // Case A: NEW LISTING
+          if (!prev && (matchedRule.triggerMode === 'both' || matchedRule.triggerMode === 'new_only')) {
+            triggerDropAlert({
+              product,
+              rule: matchedRule,
+              eventType: 'NEW_LISTING'
+            });
+            newAlertsTriggered++;
+          }
+          // Case B: RESTOCK
+          else if (
+            prev &&
+            prev.available === false &&
+            product.available === true &&
+            (matchedRule.triggerMode === 'both' || matchedRule.triggerMode === 'restock_only')
+          ) {
+            triggerDropAlert({
+              product,
+              rule: matchedRule,
+              eventType: 'RESTOCK'
+            });
+            newAlertsTriggered++;
+          }
+        }
+
+        state.baseline[product.id] = {
+          title: product.title,
+          handle: product.handle,
+          available: product.available,
+          minPrice: product.minPrice,
+          publishedAt: product.publishedAt,
+          seenAt: prev ? prev.seenAt : new Date().toISOString()
+        };
+      });
+
+      // Merge into state.products
+      const map = new Map();
+      if (!replaceCatalog) {
+        state.products.forEach(p => map.set(p.id, p));
+      }
+      normalizedBatch.forEach(p => map.set(p.id, p));
+
+      state.products = Array.from(map.values()).sort(
+        (a, b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0)
+      );
+
+      saveBaseline();
+      saveCatalogCache();
+
+      if (!silent) {
+        if (isInitialBaseline) {
+          showToast(
+            'Radar Armed & Live',
+            `Indexed ${state.products.length} products from Level Up Store SA. Polling every ${state.settings.intervalSec}s.`,
+            'success'
+          );
+        } else if (newAlertsTriggered > 0) {
+          showToast(
+            `${newAlertsTriggered} Drop Alert${newAlertsTriggered > 1 ? 's' : ''} Detected!`,
+            'Check your Alert Feed or click the popup to open Level Up Store.',
+            'alert'
+          );
+        }
+      }
+    }
+
+    /**
+     * Non-Blocking Background Pagination (Pages 2–4) if Page 1 returned 250 items
+     */
+    function fetchRemainingPagesInBackground() {
+      const extraPages = [2, 3, 4];
+      Promise.allSettled(extraPages.map(pageNum => fetchShopifyPageRace(pageNum))).then(results => {
+        let extraProducts = [];
+        results.forEach(res => {
+          if (res.status === 'fulfilled' && Array.isArray(res.value.products)) {
+            extraProducts = extraProducts.concat(res.value.products.map(normalizeProduct));
+          }
+        });
+        if (extraProducts.length > 0) {
+          ingestProductsBatch(extraProducts, { replaceCatalog: false, silent: true });
+          updateAllUI();
+        }
+      });
+    }
+
+    /**
+     * Core Scan Cycle with 5-Second Hard Watchdog & Progressive Page 1 Render
+     */
+    async function executeScan() {
+      if (state.isScanning) return;
+      state.isScanning = true;
+
+      const spinner = document.getElementById('scan-spinner');
+      const mobileSpinner = document.getElementById('mobile-scan-spinner');
+      const telemetryBadge = document.getElementById('telemetry-badge');
+      if (spinner) spinner.classList.add('animate-spin');
+      if (mobileSpinner) mobileSpinner.classList.add('animate-spin');
+
+      // Hard 5-Second Initialization Watchdog so badge never stays stuck
+      const watchdogTimer = setTimeout(() => {
+        if (state.isScanning) {
+          telemetryBadge.textContent = state.products.length > 0
+            ? `Cached (${state.products.length}) • Retrying`
+            : 'Network Slow • Retrying';
+          telemetryBadge.className = 'font-mono text-[11px] text-amber-400';
+        }
+      }, 5000);
+
+      try {
+        // Race Direct + CORS relays for Page 1
+        const page1Result = await fetchShopifyPageRace(1);
+        clearTimeout(watchdogTimer);
+
+        const normalizedPage1 = page1Result.products.map(normalizeProduct);
+
+        // Immediately flip radar status to LIVE (~300-600ms) and render UI
+        telemetryBadge.textContent = `${page1Result.mode} • ${page1Result.latencyMs}ms`;
+        telemetryBadge.className = 'font-mono text-[11px] text-emerald-400';
+        document.getElementById('stat-last-scan').textContent = formatTimeSAST();
+
+        ingestProductsBatch(normalizedPage1, { replaceCatalog: false, silent: false });
+        state.hasCompletedFirstScan = true;
+        updateAllUI();
+
+        // Only if Page 1 hit the 250 cap, fetch Pages 2-4 concurrently in the background
+        if (page1Result.products.length >= 250) {
+          fetchRemainingPagesInBackground();
+        }
+      } catch (err) {
+        clearTimeout(watchdogTimer);
+        console.warn('Scan cycle error:', err);
+        telemetryBadge.textContent = state.products.length > 0
+          ? `Cached (${state.products.length}) • Retry in ${state.countdown}s`
+          : 'Relay Retry Pending';
+        telemetryBadge.className = 'font-mono text-[11px] text-amber-400';
+      } finally {
+        state.isScanning = false;
+        if (spinner) spinner.classList.remove('animate-spin');
+        if (mobileSpinner) mobileSpinner.classList.remove('animate-spin');
+      }
+    }
+
+    /**
+     * Dispatch a confirmed Drop or Restock Alert (UI Log + Sound + Native OS Notification)
+     */
+    function triggerDropAlert({ product, rule, eventType, isSimulated = false }) {
+      const alertRecord = {
+        id: `alert-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        productId: product.id,
+        title: product.title,
+        price: product.minPrice,
+        available: product.available,
+        image: product.image,
+        url: product.url,
+        matchedRule: rule.keyword,
+        eventType,
+        timestamp: new Date().toISOString(),
+        isSimulated
+      };
+
+      state.alerts.unshift(alertRecord);
+      saveAlerts();
+
+      if (state.activeTab !== 'radar') {
+        state.unreadAlerts++;
+      }
+
+      playAlertChime();
+      sendNativeNotification(alertRecord);
+      renderAlertHistory();
+      updateKPIs();
+    }
+
+    /**
+     * Simulate a realistic Level Up Store Drop for immediate user testing
+     */
+    function simulateDropAlert() {
+      const activeRule = state.watchlist.find(r => r.active) || { keyword: '30th Celebration' };
+      const sampleProduct = {
+        id: `sim-${Date.now()}`,
+        title: `Pokémon TCG: ${activeRule.keyword} Elite Trainer Box [SA Allocation]`,
+        minPrice: 1499.00,
+        available: true,
+        image: 'https://placehold.co/300x300/10b981/070b14?text=DROP+TEST',
+        url: `${STORE_BASE_URL}/collections/all`
+      };
+
+      triggerDropAlert({
+        product: sampleProduct,
+        rule: activeRule,
+        eventType: 'NEW_LISTING',
+        isSimulated: true
+      });
+
+      showToast(
+        'Simulated Drop Alert Fired!',
+        `Tested audio chime, alert history log & browser notification for "${sampleProduct.title}".`,
+        'alert'
+      );
+    }
+
+    /**
+     * Watchlist CRUD Operations
+     */
+    function handleAddRule(e) {
+      e.preventDefault();
+      const kwInput = document.getElementById('rule-keyword');
+      const exInput = document.getElementById('rule-exclude');
+      const priceInput = document.getElementById('rule-max-price');
+      const modeSelect = document.getElementById('rule-trigger-mode');
+
+      const keyword = kwInput.value.trim();
+      if (!keyword) return;
+
+      addWatchRule(
+        keyword,
+        exInput.value.trim(),
+        priceInput.value ? parseFloat(priceInput.value) : null,
+        modeSelect.value
+      );
+
+      kwInput.value = '';
+      exInput.value = '';
+      priceInput.value = '';
+    }
+
+    function addWatchRule(keyword, exclude = '', maxPrice = null, triggerMode = 'both') {
+      const exists = state.watchlist.some(
+        r => r.keyword.toLowerCase() === keyword.toLowerCase()
+      );
+      if (exists) {
+        showToast('Already Watching', `"${keyword}" is already in your watchlist.`, 'info');
+        return;
+      }
+
+      state.watchlist.unshift({
+        id: `rule-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        keyword,
+        exclude,
+        maxPrice,
+        triggerMode,
+        active: true
+      });
+
+      saveWatchlist();
+      renderWatchlist();
+      renderPresetChips();
+      renderDetectedProducts();
+      renderLiveFeed();
+      updateKPIs();
+      showToast('Watch Rule Added', `Now sniping "${keyword}" on Level Up Store SA.`, 'success');
+    }
+
+    function toggleRuleActive(id) {
+      const rule = state.watchlist.find(r => r.id === id);
+      if (!rule) return;
+      rule.active = !rule.active;
+      saveWatchlist();
+      renderWatchlist();
+      renderDetectedProducts();
+      renderLiveFeed();
+      updateKPIs();
+    }
+
+    function deleteRule(id) {
+      if (state.selectedRuleId === id) {
+        state.selectedRuleId = null;
+      }
+      state.watchlist = state.watchlist.filter(r => r.id !== id);
+      saveWatchlist();
+      renderWatchlist();
+      renderPresetChips();
+      renderDetectedProducts();
+      renderLiveFeed();
+      updateKPIs();
+    }
+
+    function clearAlertHistory() {
+      state.alerts = [];
+      state.unreadAlerts = 0;
+      saveAlerts();
+      renderAlertHistory();
+      updateKPIs();
+      showToast('Alert Log Cleared', 'Alert history has been cleared.', 'info');
+    }
+
+    function resetBaselineSnapshot() {
+      state.baseline = {};
+      saveBaseline();
+      showToast('Re-Syncing Baseline', 'Taking fresh snapshot of Level Up Store catalog...', 'info');
+      executeScan();
+    }
+
+    /**
+     * Countdown Timer & Polling Controls
+     */
+    function startCountdownLoop() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (!state.settings.autoScan) return;
+
+        state.countdown--;
+        if (state.countdown <= 0) {
+          state.countdown = state.settings.intervalSec;
+          executeScan();
+        }
+        document.getElementById('countdown-display').textContent = `${state.countdown}s`;
+      }, 1000);
+    }
+
+    function triggerManualScan() {
+      state.countdown = state.settings.intervalSec;
+      document.getElementById('countdown-display').textContent = `${state.countdown}s`;
+      executeScan();
+    }
+
+    function toggleAutoScan() {
+      state.settings.autoScan = !state.settings.autoScan;
+      saveSettings();
+
+      const pauseIcon = document.getElementById('icon-pause');
+      const playIcon = document.getElementById('icon-play');
+      const pulseRing = document.getElementById('radar-pulse-ring');
+
+      if (state.settings.autoScan) {
+        pauseIcon.classList.remove('hidden');
+        playIcon.classList.add('hidden');
+        pulseRing.classList.add('radar-ring');
+        showToast('Auto-Radar Resumed', `Scanning every ${state.settings.intervalSec}s.`, 'success');
+      } else {
+        pauseIcon.classList.add('hidden');
+        playIcon.classList.remove('hidden');
+        pulseRing.classList.remove('radar-ring');
+        document.getElementById('countdown-display').textContent = 'PAUSED';
+        showToast('Auto-Radar Paused', 'Click play or "Scan Now" to resume.', 'info');
+      }
+    }
+
+    function changeScanInterval(newSec) {
+      const sec = parseInt(newSec, 10) || 60;
+      state.settings.intervalSec = sec;
+      state.countdown = sec;
+      saveSettings();
+      document.getElementById('countdown-display').textContent = `${sec}s`;
+    }
+
+    function toggleAudioMute() {
+      state.settings.muted = !state.settings.muted;
+      saveSettings();
+      updateAudioUI();
+      if (!state.settings.muted) playAlertChime();
+    }
+
+    function updateAudioUI() {
+      const onIcon = document.getElementById('icon-sound-on');
+      const offIcon = document.getElementById('icon-sound-off');
+      if (state.settings.muted) {
+        onIcon.classList.add('hidden');
+        offIcon.classList.remove('hidden');
+      } else {
+        onIcon.classList.remove('hidden');
+        offIcon.classList.add('hidden');
+      }
+    }
+
+    /**
+     * Screen Wake Lock API (Keeps mobile/desktop screen awake during drop hunts)
+     */
+    async function toggleWakeLock() {
+      const dot = document.getElementById('wakelock-dot');
+      const status = document.getElementById('wakelock-status');
+
+      if (!('wakeLock' in navigator)) {
+        showToast('Not Supported', 'Screen Wake Lock is not supported in this browser.', 'info');
+        return;
+      }
+
+      try {
+        if (state.wakeLock) {
+          await state.wakeLock.release();
+          state.wakeLock = null;
+          dot.className = 'w-2 h-2 rounded-full bg-slate-600';
+          status.textContent = 'OFF';
+          status.className = 'font-mono text-slate-400';
+        } else {
+          state.wakeLock = await navigator.wakeLock.request('screen');
+          dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+          status.textContent = 'ON';
+          status.className = 'font-mono text-emerald-400 font-bold';
+          showToast('Screen Stay-Awake Active', 'Your screen will stay awake so background timers are not throttled.', 'success');
+
+          state.wakeLock.addEventListener('release', () => {
+            state.wakeLock = null;
+            dot.className = 'w-2 h-2 rounded-full bg-slate-600';
+            status.textContent = 'OFF';
+            status.className = 'font-mono text-slate-400';
+          });
+        }
+      } catch (err) {
+        showToast('Wake Lock Error', 'Could not activate screen stay-awake.', 'error');
+      }
+    }
+
+    /**
+     * UI Rendering Functions
+     */
+    function switchTab(tab) {
+      state.activeTab = tab;
+      const radarView = document.getElementById('view-radar');
+      const feedView = document.getElementById('view-feed');
+      const btnRadar = document.getElementById('tab-btn-radar');
+      const btnFeed = document.getElementById('tab-btn-feed');
+
+      if (tab === 'radar') {
+        state.unreadAlerts = 0;
+        radarView.classList.remove('hidden');
+        feedView.classList.add('hidden');
+        btnRadar.className = 'px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition bg-emerald-500 text-slate-950 shadow';
+        btnFeed.className = 'px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-300 hover:text-white';
+      } else {
+        radarView.classList.add('hidden');
+        feedView.classList.remove('hidden');
+        btnFeed.className = 'px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition bg-emerald-500 text-slate-950 shadow';
+        btnRadar.className = 'px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition text-slate-300 hover:text-white';
+        renderLiveFeed();
+      }
+      updateKPIs();
+    }
+
+    function toggleGuideAccordion() {
+      const content = document.getElementById('guide-content');
+      const chevron = document.getElementById('guide-chevron');
+      content.classList.toggle('hidden');
+      chevron.classList.toggle('rotate-180');
+    }
+
+    function renderPresetChips() {
+      const container = document.getElementById('preset-chips');
+      if (!container) return;
+      container.innerHTML = QUICK_PRESETS.map(preset => {
+        const isWatched = state.watchlist.some(
+          r => r.keyword.toLowerCase() === preset.toLowerCase()
+        );
+        if (isWatched) {
+          return `<span class="px-2 py-1 rounded-lg text-[11px] font-medium bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-center gap-1">✓ ${escapeHtml(preset)}</span>`;
+        }
+        return `<button type="button" onclick="addWatchRule('${escapeHtml(preset)}')" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white transition">+ ${escapeHtml(preset)}</button>`;
+      }).join('');
+    }
+
+    function renderWatchlist() {
+      const container = document.getElementById('watchlist-container');
+      const countLabel = document.getElementById('watchlist-count-label');
+      if (!container || !countLabel) return;
+
+      countLabel.textContent = `${state.watchlist.length} rule${state.watchlist.length === 1 ? '' : 's'}`;
+
+      if (state.watchlist.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 px-4 rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
+            No watch rules configured yet. Add a keyword above (e.g., "30th Celebration" or "Topps Chrome") to start sniping drops.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = state.watchlist.map(rule => {
+        const currentMatches = state.products.filter(p => productMatchesRule(p, rule));
+        const inStockMatches = currentMatches.filter(p => p.available).length;
+        const isSelected = state.selectedRuleId === rule.id;
+        const modeLabel =
+          rule.triggerMode === 'new_only'
+            ? 'New Listings Only'
+            : rule.triggerMode === 'restock_only'
+            ? 'Restocks Only'
+            : 'New + Restock';
+
+        const cardBorderClass = isSelected
+          ? 'bg-emerald-950/35 border-emerald-400 ring-2 ring-emerald-400/35 shadow-lg shadow-emerald-500/10'
+          : rule.active
+          ? 'bg-[#11192e] border-slate-700/80 hover:border-emerald-500/50 hover:bg-[#141f38]'
+          : 'bg-slate-950/60 border-slate-800/60 opacity-65 hover:opacity-90';
+
+        return `
+          <div onclick="selectWatchRuleFilter('${rule.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectWatchRuleFilter('${rule.id}');}" class="p-3.5 rounded-xl border transition cursor-pointer select-none ${cardBorderClass}">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-bold text-white truncate">${escapeHtml(rule.keyword)}</span>
+                  ${isSelected ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-extrabold bg-emerald-500 text-slate-950 tracking-wider">FILTERING</span>' : ''}
+                </div>
+                <div class="mt-1">
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-300">${modeLabel}</span>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-x-2.5 gap-y-1 mt-2 text-[11px] text-slate-400">
+                  <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    ${rule.maxPrice ? `<span class="font-mono text-cyan-300">Max: ${formatZAR(rule.maxPrice)}</span>` : ''}
+                    ${rule.exclude ? `<span class="text-rose-300/80">Excl: ${escapeHtml(rule.exclude)}</span>` : ''}
+                    <span class="font-mono ${inStockMatches > 0 ? 'text-emerald-400 font-semibold' : 'text-slate-400'}">
+                      ${currentMatches.length} in catalog (${inStockMatches} in stock)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-col items-end justify-between gap-2 shrink-0">
+                <div class="flex items-center gap-1.5">
+                  <button type="button" onclick="event.stopPropagation(); toggleRuleActive('${rule.id}')" title="${rule.active ? 'Pause Rule' : 'Resume Rule'}" class="px-2 py-1 rounded-lg text-[10px] font-mono font-bold border transition ${rule.active ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}">
+                    ${rule.active ? 'ARMED' : 'PAUSED'}
+                  </button>
+                  <button type="button" onclick="event.stopPropagation(); deleteRule('${rule.id}')" title="Delete Rule" class="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+                </div>
+                <span class="text-[11px] font-semibold ${isSelected ? 'text-emerald-300' : 'text-cyan-400'}">
+                  ${isSelected ? 'Viewing matches ↓' : 'View matches →'}
+                </span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    /**
+     * Render Detected Products List (Filtered by clicked Watch Rule + Status Pill)
+     */
+    function renderDetectedProducts() {
+      const container = document.getElementById('detected-products-container');
+      const banner = document.getElementById('active-rule-banner');
+      const bannerTitle = document.getElementById('active-rule-banner-title');
+      const bannerMeta = document.getElementById('active-rule-banner-meta');
+      const sectionTitle = document.getElementById('detected-section-title');
+      const sectionSubtitle = document.getElementById('detected-section-subtitle');
+
+      if (!container) return;
+
+      const selectedRule = state.selectedRuleId
+        ? state.watchlist.find(r => r.id === state.selectedRuleId)
+        : null;
+
+      let matchedItems = [];
+      if (selectedRule) {
+        matchedItems = state.products
+          .filter(p => productMatchesRule(p, selectedRule))
+          .map(p => ({ product: p, rule: selectedRule }));
+
+        const inStockTotal = matchedItems.filter(m => m.product.available).length;
+        banner.classList.remove('hidden');
+        bannerTitle.textContent = `Showing matches for: "${selectedRule.keyword}"`;
+        const exclNote = selectedRule.exclude ? ` • Excl: ${selectedRule.exclude}` : '';
+        bannerMeta.textContent = `${matchedItems.length} in catalog • ${inStockTotal} in stock${exclNote}`;
+        sectionTitle.textContent = `Matches: ${selectedRule.keyword}`;
+        sectionSubtitle.textContent = 'Filtered live catalog results for this watch rule.';
+      } else {
+        banner.classList.add('hidden');
+        sectionTitle.textContent = 'Detected Watchlist Products';
+        sectionSubtitle.textContent = 'All live catalog items matching any of your watch rules.';
+
+        state.products.forEach(p => {
+          const rule = state.watchlist.find(r => productMatchesRule(p, r));
+          if (rule) {
+            matchedItems.push({ product: p, rule });
+          }
+        });
+      }
+
+      const recentAlertMap = new Map();
+      state.alerts.forEach(a => {
+        if (!recentAlertMap.has(String(a.productId))) {
+          recentAlertMap.set(String(a.productId), a.eventType);
+        }
+      });
+
+      let filtered = matchedItems;
+      if (state.detectedStatusFilter === 'instock') {
+        filtered = matchedItems.filter(m => m.product.available);
+      } else if (state.detectedStatusFilter === 'recent') {
+        filtered = matchedItems.filter(m => recentAlertMap.has(m.product.id));
+      }
+
+      if (filtered.length === 0) {
+        const emptyMsg = state.products.length === 0
+          ? 'Syncing initial catalog from Level Up Store SA...'
+          : selectedRule
+          ? `No products matched "${escapeHtml(selectedRule.keyword)}" under the current filter pill.`
+          : 'No products in the current catalog match your watch rules yet.';
+        container.innerHTML = `
+          <div class="text-center py-10 px-4 rounded-xl border border-dashed border-slate-800 bg-slate-950/30">
+            <p class="text-xs sm:text-sm font-semibold text-slate-300">${emptyMsg}</p>
+            <p class="text-[11px] text-slate-500 mt-1">Try switching the filter pill above or click "Scan" to refresh Level Up Store SA.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(({ product: p, rule }) => {
+        const alertEvent = recentAlertMap.get(p.id);
+        const eventBadge =
+          alertEvent === 'NEW_LISTING'
+            ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/40">NEW LISTING</span>'
+            : alertEvent === 'RESTOCK'
+            ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/40">RESTOCKED</span>'
+            : '';
+
+        return `
+          <div class="p-3 rounded-xl bg-[#11192e] border ${p.available ? 'border-emerald-500/30' : 'border-slate-800'} flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-slate-600 transition">
+            <div class="flex items-center gap-3 min-w-0">
+              <img src="${escapeHtml(p.image)}" onerror="this.src='https://placehold.co/120x120/11192e/64748b?text=LU'" alt="" loading="lazy" class="w-14 h-14 rounded-xl object-contain bg-slate-950 border border-slate-800 p-1 shrink-0" />
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap mb-1">
+                  <span class="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${p.available ? 'bg-emerald-500 text-slate-950' : 'bg-rose-950/70 text-rose-300 border border-rose-500/30'}">
+                    ${p.available ? 'IN STOCK' : 'SOLD OUT'}
+                  </span>
+                  ${eventBadge}
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-800/90 text-slate-300 truncate max-w-[160px]">
+                    Rule: ${escapeHtml(rule.keyword)}
+                  </span>
+                </div>
+                <h3 class="text-xs sm:text-sm font-bold text-white leading-snug line-clamp-2">${escapeHtml(p.title)}</h3>
+                <div class="flex items-center gap-2 mt-1 text-xs">
+                  <span class="font-mono font-extrabold text-emerald-400 tabular-nums">${formatZAR(p.minPrice)}</span>
+                  ${p.productType ? `<span class="text-slate-500">•</span><span class="text-[11px] text-slate-400 truncate">${escapeHtml(p.productType)}</span>` : ''}
+                </div>
+              </div>
+            </div>
+
+            <a href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer" class="px-3.5 py-2 rounded-xl ${p.available ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shadow-md shadow-emerald-500/15' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold'} active:scale-95 text-xs transition text-center shrink-0 flex items-center justify-center gap-1">
+              Buy on Level Up Store ↗
+            </a>
+          </div>
+        `;
+      }).join('');
+    }
+
+    /**
+     * Render Real-Time Drop & Restock Alert History Feed
+     */
+    function renderAlertHistory() {
+      const container = document.getElementById('alert-history-container');
+      if (!container) return;
+
+      if (state.alerts.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-10 px-4 rounded-xl border border-dashed border-slate-800 bg-slate-950/30">
+            <p class="text-xs font-semibold text-slate-300">No drop or restock notifications logged yet</p>
+            <p class="text-[11px] text-slate-500 mt-1">When Level Up Store SA lists a new product or restocks a sold-out item matching your watch rules, it will appear here immediately.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = state.alerts.map(a => {
+        const isNew = a.eventType === 'NEW_LISTING';
+        return `
+          <div class="p-3 rounded-xl bg-[#11192e] border ${isNew ? 'border-cyan-500/40' : 'border-amber-500/40'} flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <img src="${escapeHtml(a.image)}" onerror="this.src='https://placehold.co/120x120/11192e/64748b?text=LU'" alt="" loading="lazy" class="w-12 h-12 rounded-xl object-contain bg-slate-950 border border-slate-800 p-1 shrink-0" />
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap mb-1">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold ${isNew ? 'bg-cyan-500 text-slate-950' : 'bg-amber-500 text-slate-950'}">
+                    ${isNew ? 'NEW LISTING' : 'RESTOCKED'}
+                  </span>
+                  <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-300">
+                    Rule: ${escapeHtml(a.matchedRule)}
+                  </span>
+                  ${a.isSimulated ? '<span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30">TEST</span>' : ''}
+                  <span class="text-[10px] font-mono text-slate-400">${formatRelativeDate(a.timestamp)}</span>
+                </div>
+                <h3 class="text-xs sm:text-sm font-bold text-white leading-snug line-clamp-1">${escapeHtml(a.title)}</h3>
+                <p class="text-xs font-mono font-bold text-emerald-400 mt-0.5">${formatZAR(a.price)}</p>
+              </div>
+            </div>
+
+            <a href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer" class="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition text-center shrink-0">
+              Open Store ↗
+            </a>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderLiveFeed() {
+      const grid = document.getElementById('live-feed-grid');
+      if (!grid) return;
+
+      const searchVal = (document.getElementById('feed-search-input').value || '').trim().toLowerCase();
+      const inStockOnly = document.getElementById('feed-instock-only').checked;
+      const matchesOnly = document.getElementById('feed-matches-only').checked;
+
+      let filtered = state.products;
+
+      if (searchVal) {
+        filtered = filtered.filter(p =>
+          `${p.title} ${p.productType} ${p.tags}`.toLowerCase().includes(searchVal)
+        );
+      }
+      if (inStockOnly) {
+        filtered = filtered.filter(p => p.available);
+      }
+      if (matchesOnly) {
+        filtered = filtered.filter(p => Boolean(findMatchingRule(p)));
+      }
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full text-center py-12 text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">
+            No products match the active filter criteria.
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = filtered.slice(0, 80).map(p => {
+        const matchedRule = findMatchingRule(p);
+        const shortKw = p.title.split(/[-–:|(]/)[0].trim().slice(0, 32);
+
+        return `
+          <div class="bg-[#11192e] border ${matchedRule ? 'border-emerald-500/40' : 'border-slate-800'} rounded-xl p-3 flex flex-col justify-between gap-3 hover:border-slate-600 transition">
+            <div>
+              <div class="relative aspect-square w-full rounded-lg bg-slate-950 border border-slate-800/80 overflow-hidden mb-2.5">
+                <img src="${escapeHtml(p.image)}" onerror="this.src='https://placehold.co/300x300/11192e/64748b?text=Level+Up+SA'" alt="" loading="lazy" class="w-full h-full object-contain p-2" />
+                <span class="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${p.available ? 'bg-emerald-500 text-slate-950' : 'bg-slate-900/90 text-slate-400 border border-slate-700'}">
+                  ${p.available ? 'IN STOCK' : 'SOLD OUT'}
+                </span>
+                ${matchedRule ? `<span class="absolute top-2 right-2 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-amber-500 text-slate-950">WATCHED</span>` : ''}
+              </div>
+
+              <div class="text-[10px] font-mono text-slate-400 mb-1">${formatRelativeDate(p.publishedAt)}</div>
+              <h3 class="text-xs font-bold text-slate-100 line-clamp-2 leading-snug" title="${escapeHtml(p.title)}">${escapeHtml(p.title)}</h3>
+            </div>
+
+            <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+              <span class="text-xs font-mono font-extrabold text-white tabular-nums">${formatZAR(p.minPrice)}</span>
+              <div class="flex items-center gap-1.5">
+                <button onclick="addWatchRule('${escapeHtml(shortKw).replace(/'/g, "\\'")}')" title="Watch similar products" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-slate-200 transition">
+                  + Watch
+                </button>
+                <a href="${escapeHtml(p.url)}" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1 rounded-lg ${p.available ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'} text-[11px] transition">
+                  View ↗
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updateKPIs() {
+      const activeRulesCount = state.watchlist.filter(r => r.active).length;
+      const inStockCount = state.products.filter(p => p.available).length;
+
+      document.getElementById('stat-active-rules').textContent = activeRulesCount;
+      document.getElementById('stat-catalog-count').textContent = state.products.length;
+      document.getElementById('stat-instock-count').textContent = `${inStockCount} in stock`;
+      document.getElementById('stat-alerts-count').textContent = state.alerts.length;
+      document.getElementById('tab-feed-count').textContent = `(${state.products.length})`;
+
+      const unreadBadge = document.getElementById('tab-alert-badge');
+      if (state.unreadAlerts > 0) {
+        unreadBadge.textContent = state.unreadAlerts;
+        unreadBadge.classList.remove('hidden');
+      } else {
+        unreadBadge.classList.add('hidden');
+      }
+    }
+
+    function updateAllUI() {
+      updateKPIs();
+      renderPresetChips();
+      renderWatchlist();
+      renderDetectedProducts();
+      renderAlertHistory();
+      if (state.activeTab === 'feed') {
+        renderLiveFeed();
+      }
+    }
+
+    /**
+     * Instant Cache-First Boot (<100ms UI hydration before live network race)
+     */
+    window.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      document.getElementById('interval-select').value = String(state.settings.intervalSec);
+      updateNotificationUI();
+      updateAudioUI();
+
+      // Immediately render cached catalog, watch rules, and alerts in <100ms
+      updateAllUI();
+
+      const telemetryBadge = document.getElementById('telemetry-badge');
+      if (state.products.length > 0) {
+        telemetryBadge.textContent = `Cached (${state.products.length}) • Updating...`;
+        telemetryBadge.className = 'font-mono text-[11px] text-cyan-400';
+      } else {
+        telemetryBadge.textContent = 'Racing relays...';
+        telemetryBadge.className = 'font-mono text-[11px] text-cyan-400';
+      }
+
+      startCountdownLoop();
+      // Trigger non-blocking parallel transport race immediately
+      executeScan();
+    });
+  </script>
+</body>
+</html>
